@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
+import java.util.Optional
 
 private val MANAGER_REQUEST_BODY = { name: String ->
     """
@@ -116,7 +117,18 @@ class ControllerTests {
         // SETUP
         // Initial state: /employees/1 is Mary, Manager, id 1. /employees/2 has no representation.
         // Runtime state: both stay that way.
-        TODO("Complete the mock setup for GET test")
+        // Employee 1 exists, so findById(1) always returns Mary.
+        every {
+            employeeRepository.findById(1)
+        } answers {
+            Optional.of(Employee("Mary", "Manager", 1))
+        }
+        // Employee 2 does not exist, so findById(2) is always empty (the controller answers 404).
+        every {
+            employeeRepository.findById(2)
+        } answers {
+            Optional.empty()
+        }
 
         mvc.get("/employees/1").andExpect {
             status { isOk() }
@@ -142,10 +154,21 @@ class ControllerTests {
             status { isNotFound() }
         }
 
-        // VERIFY - COMPLETE ME!
-        // Hint: Since GET is safe, what repository methods should NOT be called?
-        // Count how many times each method was called based on the test requests.
-        TODO("Complete the verification for GET test")
+        // VERIFY
+        // Idempotent: each request is one read, so two requests mean two reads.
+        // Both times we got the same answer (200 for id 1, 404 for id 2).
+        verify(exactly = 2) {
+            employeeRepository.findById(1)
+        }
+        verify(exactly = 2) {
+            employeeRepository.findById(2)
+        }
+        // Safe: nothing was saved or deleted. GET of one item must not list the collection either.
+        verify(exactly = 0) {
+            employeeRepository.save(any())
+            employeeRepository.deleteById(any())
+            employeeRepository.findAll()
+        }
     }
 
     @Test
