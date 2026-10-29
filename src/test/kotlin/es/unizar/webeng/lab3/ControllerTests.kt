@@ -1,6 +1,8 @@
 package es.unizar.webeng.lab3
 
 import com.ninjasquad.springmockk.MockkBean
+import io.mockk.every
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -52,10 +54,18 @@ class ControllerTests {
 
     @Test
     fun `POST is not safe and not idempotent`() {
-        // SETUP - COMPLETE ME!
+        // SETUP
         // Initial state: the collection is empty. No employee exists.
         // Runtime state: the first save stores Mary, Manager, as id 1. The second save stores Mary, Manager, as id 2.
-        TODO("Complete the mock setup for POST test")
+        // The mock repository plays the database: each call to save gives back
+        // the employee with a new id (1 the first time, 2 the second time).
+        every {
+            employeeRepository.save(any<Employee>())
+        } answers {
+            Employee("Mary", "Manager", 1)
+        } andThenAnswer {
+            Employee("Mary", "Manager", 2)
+        }
 
         mvc
             .post("/employees") {
@@ -85,10 +95,20 @@ class ControllerTests {
                 }
             }
 
-        // VERIFY - COMPLETE ME!
-        // Hint: What repository methods should be called for a POST operation?
-        // What methods should NOT be called? Think about the difference between safe and unsafe operations.
-        TODO("Complete the verification for POST test")
+        // VERIFY
+        // Not idempotent: two identical requests caused two saves, so two employees
+        // (id 1 and id 2) now exist. The controller sets id = null before saving,
+        // so the client can never choose the id.
+        verify(exactly = 2) {
+            employeeRepository.save(Employee("Mary", "Manager", null))
+        }
+        // Not safe: save is a write. POST only creates, so it must not
+        // read one employee, list the collection, or delete anything.
+        verify(exactly = 0) {
+            employeeRepository.findById(any())
+            employeeRepository.findAll()
+            employeeRepository.deleteById(any())
+        }
     }
 
     @Test
