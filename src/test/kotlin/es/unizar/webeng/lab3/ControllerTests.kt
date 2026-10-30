@@ -2,6 +2,7 @@ package es.unizar.webeng.lab3
 
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -243,7 +244,12 @@ class ControllerTests {
         // SETUP
         // Initial state: /employees/1 is associated with an employee.
         // Runtime state: the first DELETE removes that association. The second DELETE finds it already gone.
-        TODO("Complete the mock setup for DELETE test")
+        // deleteById returns nothing, and it does not fail when the id is already gone.
+        // The same stub is used for both DELETE requests.
+        justRun {
+            employeeRepository.deleteById(1)
+        }
+
         mvc.delete("/employees/1").andExpect {
             status { isNoContent() }
         }
@@ -253,24 +259,29 @@ class ControllerTests {
         }
 
         // VERIFY
-        // Hint: What repository methods should be called for DELETE operations?
-        // What methods should NOT be called? Think about the nature of DELETE operations.
-        TODO("Complete the verification for DELETE test")
+        // Not safe: deleteById is a write.
+        // Idempotent: both calls target the same id, and after each one employee 1 is absent.
+        verify(exactly = 2) {
+            employeeRepository.deleteById(1)
+        }
+        // DELETE only deletes: it does not save, read one employee, or list the collection.
+        verify(exactly = 0) {
+            employeeRepository.save(any())
+            employeeRepository.findById(any())
+            employeeRepository.findAll()
+        }
     }
 
     @Test
     fun `GET collection is safe and idempotent`() {
-        // SETUP - COMPLETE ME!
+        // SETUP
         // Initial state: the collection contains exactly Mary, Manager, id 1.
         // Runtime state: the second GET sees that same list.
-        TODO("Complete the mock setup for the collection GET")
-
-        mvc.get("/employees").andExpect {
-            status { isOk() }
-            content {
-                contentType(MediaType.APPLICATION_JSON)
-                json(MANAGER_LIST_BODY)
-            }
+        // Nothing changes the collection, so findAll always returns the same list.
+        every {
+            employeeRepository.findAll()
+        } answers {
+            listOf(Employee("Mary", "Manager", 1))
         }
 
         mvc.get("/employees").andExpect {
@@ -281,8 +292,24 @@ class ControllerTests {
             }
         }
 
-        // VERIFY - COMPLETE ME!
-        // Hint: Count the list calls. A safe list must not save, delete, or fetch one id.
-        TODO("Complete the verification for the collection GET")
+        mvc.get("/employees").andExpect {
+            status { isOk() }
+            content {
+                contentType(MediaType.APPLICATION_JSON)
+                json(MANAGER_LIST_BODY)
+            }
+        }
+
+        // VERIFY
+        // Idempotent: each request is one list read, and both returned the same list.
+        verify(exactly = 2) {
+            employeeRepository.findAll()
+        }
+        // Safe: nothing was saved or deleted. Listing does not read employees one by one either.
+        verify(exactly = 0) {
+            employeeRepository.save(any())
+            employeeRepository.deleteById(any())
+            employeeRepository.findById(any())
+        }
     }
 }
